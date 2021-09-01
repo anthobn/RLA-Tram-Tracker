@@ -38,7 +38,7 @@ export default class Tram {
         let cross = stop.checkHours(this.id);
         this.realTime = cross.realTime;
         let hour = cross.time;
-        if (hour) {
+        if (hour && hour > new Date()) {
           start = {
             lat: element.lat,
             lng: element.lng,
