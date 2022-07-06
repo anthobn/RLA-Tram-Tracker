@@ -7,3 +7,7 @@ RLA-Tram-Tracker allow users to follow the progesion of each tramway in real tim
 ## Technical purpose
 
 This project asks the Lignes D'azur API to grab data of each tramway journey. It displays the tram progression on a map according the real-time schedule at each stop on the road.
+
+## Access
+
+You can access to the Website by following [this link](https://anthobn.github.io/RLA-Tram-Tracker/)
