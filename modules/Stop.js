@@ -25,33 +25,7 @@ export default class Stop {
   init() {
     return new Promise(async (resolve, reject) => {
       try {
-        //get all schedules times
-        let schedules = await this.getSchedulesFromApi(this.id, this.maxItems);
-
-        let hours = [];
-
-        //sort all schedules and get only schedule regarding the lines given in lineIds
-        this.lineIds.forEach((lineId) => {
-          schedules["Data"]["Hours"].forEach((hour) => {
-            if (hour.LineId === lineId) {
-              //find the direction of this VehicleJourneys
-              const vehicleJourneyId = hour.VehicleJourneyId;
-              const vehicleJourney = schedules["Data"]["VehicleJourneys"].find(
-                (e) => e.Id === vehicleJourneyId
-              );
-
-              //create hour object
-              let obj = {
-                ...hour,
-                Direction: vehicleJourney.JourneyDirection,
-              };
-
-              hours.push(obj);
-            }
-          });
-        });
-
-        this.schedules = hours;
+        this.schedules = await this.getHoursFromApi();
         resolve();
       } catch (error) {
         reject(error);
@@ -61,45 +35,100 @@ export default class Stop {
 
   async getSchedulesFromApi(stopId, maxItems) {
     const response = await fetch(
-      `https://sleepy-crag-45946.herokuapp.com/https://api.lignesdazur.com/api/transport/v3/timetable/GetNextStopHours/json?LogicalStopIds=${stopId}&MaxItemsByStop=${maxItems}`
+      `https://api.rla2.cityway.fr/api/transport/v3/timetable/GetNextStopHours/json?LogicalStopIds=${stopId}&MaxItemsByStop=${maxItems}`
     );
     const json = await response.json();
     //log
-    console.debug("Reveided data from RLA API :");
+    console.debug(`Reveided data from RLA API for ${this.name} :`);
     console.debug(json["Data"]);
 
     return json;
   }
 
-  checkHours(vehicleJourneyId) {
-    let obj = {
-      time: false,
-      realTime: true,
-    };
-    let element;
-    if (
-      (element = this.schedules.find(
-        (e) => e.VehicleJourneyId === vehicleJourneyId
-      ))
-    ) {
-      //get the time
-      let time = element.PredictedArrivalTime ?? element.PredictedDepartureTime;
-      //if there is not predicted time, pass theorical time
-      if (!time) {
-        obj.realTime = false;
-        time = element.TheoricArrivalTime ?? element.TheoricDepartureTime;
-      }
-      obj.time = this.convertM2DT(time);
+  async getHoursFromApi() {
+    const schedules = await this.getSchedulesFromApi(this.id, this.maxItems);
+
+    let hours = [];
+
+    //sort all schedules and get only schedule regarding the lines given in lineIds
+    this.lineIds.forEach((lineId) => {
+      schedules["Data"]["Hours"].forEach((el) => {
+        if (el.LineId === lineId) {
+          //find the direction of this VehicleJourneys
+          const vehicleJourneyId = el.VehicleJourneyId;
+          const vehicleJourney = schedules["Data"]["VehicleJourneys"].find(
+            (e) => e.Id === vehicleJourneyId
+          );
+
+          //add realTime and Time attribute to object for future treatments
+          //by default, suggest hour in realTime traffic
+          let hour = { ...el };
+          hour.realTime = true;
+
+          //get the time
+          let time = el.PredictedArrivalTime ?? el.PredictedDepartureTime;
+
+          //if there is not predicted time, pass theorical time
+          if (!time) {
+            hour.realTime = false;
+            time = el.TheoricArrivalTime ?? el.TheoricDepartureTime;
+          }
+
+          //convert hour to DT
+          hour.time = this.convertM2DT(time);
+
+          //add tomorrow if date if less than current time
+          /* if (hour.time && hour.time < new Date()) {
+            hour.time = this.addDaysToDT(hour.time, 1);
+          } */
+
+          //create hour object
+          let obj = {
+            ...hour,
+            VehicleJourneyId:
+              vehicleJourneyId + "D" + vehicleJourney.JourneyDirection, //add destination to JourneyId
+            Direction: vehicleJourney.JourneyDirection,
+          };
+
+          hours.push(obj);
+        }
+      });
+    });
+
+    return hours;
+  }
+
+  async checkHours(vehicleJourneyId, init = true) {
+    //if this is not the first call of this function, call api to refresh data
+    if (!init) {
+      console.debug(
+        `Stop ${this.name} : Tram ${vehicleJourneyId} init a refresh data on this stop. Call API...`
+      );
+      this.schedules = await this.getHoursFromApi();
     }
-    return obj;
+
+    let element = this.schedules.find(
+      (e) => e.VehicleJourneyId === vehicleJourneyId
+    );
+
+    return element ?? false;
   }
 
   //this method convert minutes to dateTime object with minutes converted to hours
   convertM2DT(mins) {
+    if (!mins) {
+      return null;
+    }
+
     let h = Math.floor(mins / 60);
     let m = mins % 60;
     h = h < 10 ? "0" + h : h;
     m = m < 10 ? "0" + m : m;
     return new Date(new Date().setHours(h, m, 0, 0));
+  }
+
+  addDaysToDT(date, days) {
+    date.setDate(date.getDate() + days);
+    return date;
   }
 }

@@ -92,7 +92,10 @@ window.initApp = async () => {
         stopsObjs.forEach(async (stopObj) => {
           //get the vehicleJourneyId from stops obj and add to the array if not already exist
           stopObj.schedules.forEach((hour) => {
-            if (!vehicleJourneyId.some((e) => e.id === hour.VehicleJourneyId)) {
+            if (
+              hour.realTime &&
+              hour.time < new Date(new Date().getTime() + 30000) //30S
+            ) {
               //create tram object
               let obj = new Tram({
                 id: hour.VehicleJourneyId,
@@ -101,7 +104,12 @@ window.initApp = async () => {
                 map,
                 stops: stopsObjs,
                 pathPlanCoordinates,
+                currentStop: stopObj,
+                realTime: true,
               });
+              console.debug(
+                `Tram ${obj.id} D ${obj.direction} : Tram mounted ! `
+              );
               //lets go on the map !
               obj.init();
               vehicleJourneyId.push(obj);

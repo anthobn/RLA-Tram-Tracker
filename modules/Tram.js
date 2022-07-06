@@ -29,28 +29,24 @@ export default class Tram {
     if (this.direction === 2) {
       this.pathPlanCoordinates = this.pathPlanCoordinates.slice().reverse();
     }
+
+    let cross = await this.currentStop.checkHours(this.id, true);
+
     let start;
+    start = {
+      lat: this.currentStop.lat,
+      lng: this.currentStop.lng,
+      time: cross.time,
+    };
+    console.debug(
+      `Tram ${this.id} D ${this.direction} : Current stop : ${this.currentStop.name}! `
+    );
 
-    //loop each stop and ask stop to know how tram needs to start
-    for (const element of this.pathPlanCoordinates) {
-      if (element.stop) {
-        const stop = this.stops.find((e) => e.id === element.stop.id);
-        let cross = stop.checkHours(this.id);
-        this.realTime = cross.realTime;
-        let hour = cross.time;
-        if (hour && hour > new Date()) {
-          start = {
-            lat: element.lat,
-            lng: element.lng,
-            time: hour,
-          };
-          this.currentStop = stop;
-          break;
-        }
-      }
-    }
+    if (start && start.time > new Date() && this.realTime) {
+      console.debug(
+        `Tram ${this.id} D ${this.direction} : Tram in realtime, start from ${this.currentStop.name} at ${start.time} `
+      );
 
-    if (start.time > new Date()) {
       //if tramway is planned in more than X second, wait before show this tram on the map
       if (
         start.time > new Date(new Date().getTime() + this.timeToHide * 1000)
@@ -73,9 +69,25 @@ export default class Tram {
 
       this.go();
     } else {
-      console.debug(
-        `Tram ${this.id} D ${this.direction} : Tram planned in past. Didn't show ! `
-      );
+      if (!this.realTime) {
+        console.debug(
+          `Tram ${this.id} D ${this.direction} : Tram isn't in realtime mode. Didn't show ! `
+        );
+      }
+
+      if (!start) {
+        console.debug(
+          `Tram ${this.id} D ${this.direction} : There is no stop available for this Tram at this time`
+        );
+      }
+
+      if (start && start.time < new Date()) {
+        console.debug(
+          `Tram ${this.id} D ${
+            this.direction
+          } : Tram planned in past (${new Date(start.time)}). Didn't show ! `
+        );
+      }
     }
   }
 
@@ -90,7 +102,7 @@ export default class Tram {
       }
       if (nextStopId) {
         let nextStop = this.stops.find((e) => e.id === nextStopId);
-        let cross = nextStop.checkHours(this.id);
+        let cross = await nextStop.checkHours(this.id, false);
         this.realTime = cross.realTime;
         let hour = cross.time;
         if (hour && hour > new Date()) {
@@ -110,9 +122,26 @@ export default class Tram {
         } else {
           //temporary terminus (degraded service)
           //TODO : check data received by api when degraded service
+          if (!hour) {
+            console.debug(
+              `Tram ${this.id} D ${this.direction} : Degraded terminus... `
+            );
+          }
+
+          if (hour && hour < new Date()) {
+            console.debug(
+              `Tram ${this.id} D ${
+                this.direction
+              } : Next stop of this tram is less than actual time (${new Date(
+                hour
+              )}) `
+            );
+          }
+
           console.debug(
-            `Tram ${this.id} D ${this.direction} : Degraded terminus or next stop of this tram is less than actuel time... `
+            `Tram ${this.id} D ${this.direction} : Degraded terminus or next stop of this tram is less than actuel time (unknow error, hour state : ${hour})... `
           );
+
           break;
         }
       } else {
