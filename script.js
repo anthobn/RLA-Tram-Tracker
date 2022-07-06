@@ -124,5 +124,8 @@ window.initApp = async () => {
   }
 
   const stopsObjs = await createStopsObjs();
-  createTramsObjs(stopsObjs, pathPlanCoordinates);
+  createTramsObjs(stopsObjs, pathPlanCoordinates).then(() => {
+    let loader = document.getElementById("loader");
+    loader.style.display = "none";
+  });
 };
